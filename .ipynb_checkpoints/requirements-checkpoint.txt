@@ -1,0 +1,11 @@
+fastapi[all]
+uvicorn
+requests
+transformers
+sentence-transformers
+faiss-cpu
+torch
+huggingface-hub
+accelerate>=0.26.0
+gunicorn
+redis
