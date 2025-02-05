@@ -1,4 +1,4 @@
-from app.utils.orchestrator import Orchestrator
+# from app.utils.orchestrator import Orchestrator
 import redis
 from app.models.chat_models import UserQuery, ChatResponse
 from app.models.instance_models import InstanceRequest
@@ -10,7 +10,7 @@ from typing import Dict
 
 
 
-orchestrator = Orchestrator()
+# orchestrator = Orchestrator()
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
 HARDCODED_SECURITY_GROUP = {
@@ -40,7 +40,7 @@ class WorkflowState:
 class Instance_Creation:
     def __init__(self, query: UserQuery):
         self.redis_client = redis_client
-        self.llm = orchestrator.instance_creation_query_handler()
+        # self.llm = orchestrator.instance_creation_query_handler()
         self.allowed_values = fetch_allowed_values(query.jwt_token)
         self.query = query
         self.jwt_token = query.jwt_token
@@ -285,7 +285,7 @@ class Instance_Creation:
             elif step == "project":
                 selected = next(p for p in self.allowed_values["allowed_projects"]
                                if p["name"].lower() == user_input.lower())
-                data["project"] = selected["name"]
+                data["project"] = selected["id"]
                 
             elif step == "location":
                 selected = next(z for z in self.allowed_values["allowed_zones"] 
@@ -548,7 +548,7 @@ class Instance_Creation:
 # from app.utils.orchestrator import Orchestrator
 # import redis
 # from app.utils.response_processing import clean_response
-# from app.utils.prompt_selector import prompt_selector
+# from app.utils.prompt_selector import prompt_selector 
 # from app.models.chat_models import UserQuery, ChatResponse
 # from app.models.instance_models import InstanceRequest
 # from app.utils.instance_creation_utils.instance_data_cache import fetch_allowed_values
