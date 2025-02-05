@@ -9,3 +9,7 @@ huggingface-hub
 accelerate>=0.26.0
 gunicorn
 redis
+langgraph
+langchain
+langchain_huggingface
+

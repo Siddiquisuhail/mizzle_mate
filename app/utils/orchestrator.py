@@ -1,19 +1,24 @@
 import os
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+from langchain_huggingface import HuggingFacePipeline
 from huggingface_hub import login
 import torch
 import json
 import os
 
-# parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 
 # # Build the path to the config file
-# config_file_path = os.path.join(parent_dir, 'config.json')
+config_file_path = os.path.join(parent_dir, 'config.json')
+print(parent_dir)
+print(config_file_path)
 
-with open('config.json', 'r') as f:
+with open(config_file_path, 'r') as f:
     config = json.load(f)
 
 HF_TOKEN = config.get("HF_TOKEN")
+
+print(HF_TOKEN) 
 
 class Orchestrator:
     def __init__(self):
@@ -87,7 +92,8 @@ class Orchestrator:
             "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
         )
 
-        # print("Formatted Prompt:", formatted_prompt)
+        print("#"*40)
+        print("Formatted Prompt:", formatted_prompt)
 
         # Ensure model & input are on the same device
         device = self.model.device  # Ensure everything runs on the same device
@@ -108,9 +114,20 @@ class Orchestrator:
                 do_sample=True,
                 pad_token_id=self.tokenizer.eos_token_id
             )
-
+        torch.cuda.empty_cache()
         # Decode response
         response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
         assistant_response = response.split("assistant:")[-1].strip()
 
         return assistant_response
+    
+    
+    def instance_creation_query_handler(self):
+        pipe = pipeline("text-generation", model=self.model, tokenizer=self.tokenizer, max_length=100)
+        llm = HuggingFacePipeline(pipeline=pipe)
+        return llm
+    
+    
+    
+    
+    
