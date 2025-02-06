@@ -146,7 +146,7 @@ We welcome contributions to improve the functionality and user experience of the
 
 Have questions or need support? Reach out to us at:
 
-[contact@yourdomain.com](mailto:suhail.shamim.tech@gmail.com)
+[suhail.shamim.tech@gmail.com](mailto:suhail.shamim.tech@gmail.com)
 
 ---
 
