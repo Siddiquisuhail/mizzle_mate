@@ -146,7 +146,7 @@ We welcome contributions to improve the functionality and user experience of the
 
 Have questions or need support? Reach out to us at:
 
-[contact@yourdomain.com](mailto:contact@yourdomain.com)
+[contact@yourdomain.com](mailto:suhail.shamim.tech@gmail.com)
 
 ---
 
@@ -154,9 +154,9 @@ Have questions or need support? Reach out to us at:
 
 Follow us on social media for updates and announcements!
 
-- [Twitter](https://twitter.com/yourhandle)
-- [LinkedIn](https://linkedin.com/in/yourprofile)
-- [Facebook](https://facebook.com/yourprofile)
+- [Twitter](https://twitter.com/i_suhail_shl)
+- [LinkedIn](https://linkedin.com/in/suhail-shamim)
+
 
 ---
 
