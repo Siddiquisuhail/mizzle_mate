@@ -1,4 +1,3 @@
-Sure! Here's the full content in a single markdown file that you can upload directly as your `README.md` on GitHub:
 
 ```markdown
 # DeepSeek Cloud Assistant Chatbot 🚀
@@ -7,7 +6,7 @@ Welcome to the **DeepSeek Cloud Assistant Chatbot**! This AI-powered assistant i
 
 ---
 
-![DeepSeek Cloud Assistant](https://img.shields.io/badge/DeepSeek-Cloud%20Assistant-blue?style=for-the-badge&logo=node.js)
+
 
 ---
 
