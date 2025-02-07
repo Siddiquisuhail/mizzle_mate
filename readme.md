@@ -19,8 +19,7 @@ Welcome to the **AI Cloud Assistant Chatbot**! This AI-powered assistant is desi
 
 Before running the chatbot locally, ensure that you have the following:
 
-- **Node.js** (version 14.x or higher) ✅
-- **NPM** (Node Package Manager) ✅
+- **Python** (version 3.10 or higher) ✅
 - **Git** (to clone the repository) ✅
 
 
@@ -29,26 +28,22 @@ Before running the chatbot locally, ensure that you have the following:
 1. **Clone this repository**:
 
    ```bash
-   git clone https://github.com/yourusername/deepseek-cloud-assistant-chatbot.git
+   git clone https://github.com/Siddiquisuhail/mizzle_mate.git
    ```
 
-2. **Navigate to the project directory**:
+2. **Install dependencies**:
 
    ```bash
-   cd deepseek-cloud-assistant-chatbot
+   pip install -r requirements.txt
    ```
 
-3. **Install dependencies**:
+3. **Start the application**:
 
    ```bash
-   npm install
+   uvicorn app.main:app --reload
    ```
 
-4. **Start the application**:
 
-   ```bash
-   npm start
-   ```
 
 Now, you should be able to interact with the chatbot locally! 🎉
 
