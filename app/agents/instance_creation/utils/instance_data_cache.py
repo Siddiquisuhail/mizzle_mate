@@ -1,18 +1,19 @@
 import redis
 import requests
 import json
-from app.utils.instance_creation_utils.cleanup_functions import clean_allowed_zones, clean_allowed_packages, \
+from app.agents.instance_creation.utils.cleanup_functions import clean_allowed_zones, clean_allowed_packages, \
             clean_instance_types, clean_allowed_security_groups, clean_key_pair_names, clean_allowed_projects
-# from cleanup_functions import clean_allowed_zones, clean_allowed_packages, clean_instance_types, clean_allowed_security_groups
 
 
-# Connect to Redis (or use an in-memory dictionary for testing)
+
+
+
 try:
     cache = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
 except Exception:
     cache = {}
     
-# cache = {}
+
 
 
 API_ENDPOINTS = {
@@ -90,6 +91,6 @@ def fetch_allowed_values(token: str):
     # print("count: ", count)# Cache for 1 hour
     return allowed_values
 
-a = fetch_allowed_values("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoyMDUzOTMwNDA1LCJpYXQiOjE3Mzg1NzA0MDUsImp0aSI6IjQ0NTQ2ZDViNjA5MTQ3OTc5NDJlOTk4NzRlYTI0OTllIiwidXVpZCI6IjlmZjc4OGUyLTk4YTgtNDA0NC04ZTAwLWZkOTMyZWNiODY1YiJ9.wU7FUvHlU9wEW6huyWXZa9eoXPBSa2qAcbnpc4GR1nU")
-print('final allowed values: ', a)
+# a = fetch_allowed_values("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoyMDUzOTMwNDA1LCJpYXQiOjE3Mzg1NzA0MDUsImp0aSI6IjQ0NTQ2ZDViNjA5MTQ3OTc5NDJlOTk4NzRlYTI0OTllIiwidXVpZCI6IjlmZjc4OGUyLTk4YTgtNDA0NC04ZTAwLWZkOTMyZWNiODY1YiJ9.wU7FUvHlU9wEW6huyWXZa9eoXPBSa2qAcbnpc4GR1nU")
+# print('final allowed values: ', a)
 

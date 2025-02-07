@@ -1,33 +1,32 @@
 from fastapi import FastAPI
-# from app.routers import chat, agent
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException
 from app.models.chat_models import UserQuery, ChatResponse
-# from app.utils.orchestrator import Orchestrator
-from app.utils.response_processing import clean_response
-from app.agents.instance_creation_chat  import Instance_Creation
-from app.agents.general_chat import General_Chat
+# from app.agents.instance_creation_chat  import Instance_Creation
+from app.agents.instance_creation.instance_creation_chat import Instance_Creation
+from app.agents.general_chat.general_chat import General_Chat
 import redis
 import json
+import logging
 
 
-# orchestrator = Orchestrator()
 
 
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)  # Update host/port as needed
+
+redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)  
 
 
 
 
 app = FastAPI()
 
-# Allow all origins (not recommended for production)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update this with your frontend domain in production
+    allow_origins=["*"],  
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 
 @app.get("/")
@@ -57,14 +56,6 @@ async def chat(query: UserQuery):
             raise HTTPException(status_code=500, detail=str(e))
         
         
-    # elif query.tag == 'instance_creation':
-    #     try:
-    #         chat = Instance_Creation()
-    #         response = chat.instance_creation(query)
-    #         return {"response": response}
-    #     except Exception as e:
-    #         raise HTTPException(status_code=500, detail=str(e))
-        
     elif query.tag == 'instance_creation':
         print(f"Handling instance_creation for query: {query}") 
         try:
@@ -75,12 +66,6 @@ async def chat(query: UserQuery):
         except Exception as e: 
             raise HTTPException(status_code=500, detail=str(e))
 
-    # elif query.tag == 'instance_creation':
-    #     try:  
-    #         chat = Instance_Creation()
-    #         response = chat.instance_creation(query)
-    #         return {"response": response}
-    #     except Exception as e:
-    #         raise HTTPException(status_code=500, detail=str(e))
+
     else:
         return 'No context found'

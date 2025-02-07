@@ -1,9 +1,7 @@
-# Import necessary libraries
-from fuzzywuzzy import process  # For fuzzy matching
+from fuzzywuzzy import process
 import redis
 from app.models.chat_models import UserQuery, ChatResponse
-from app.models.instance_models import InstanceRequest
-from app.utils.instance_creation_utils.instance_data_cache import fetch_allowed_values
+from app.agents.instance_creation.utils.instance_data_cache import fetch_allowed_values
 import json
 import re
 import requests
@@ -429,34 +427,7 @@ class Instance_Creation:
                     data["packages"]["programming_languages"]["version"] = user_input.strip()
                 else:
                     raise ValueError(f"Invalid version. Allowed versions for {current_lang['name']}: {', '.join(current_lang['versions'])}")
-            
-
-            # elif step == "language_version":
-            #     language_version_list = []
-            #     for package in self.allowed_values["allowed_packages"][self.language]:
-            #         if "programming_languages" in package:
-            #             language_version_list.extend([lang["versions"] for lang in package["programming_languages"]])
-            #     print("language_version_list: ", language_version_list) 
-            #     matched_lang = self.fuzzy_match(user_input, language_version_list)
-            #     if matched_lang:
-            #         data["packages"]["programming_languages"]["version"] = matched_lang
-            #     else:
-            #         raise ValueError(f"No match found for '{user_input}'. Allowed languages: {', '.join(language_version_list)}")
-                # data["packages"]["programming_languages"]["version"] = user_input.strip()
-
-            # elif step == "public_key":
-            #     keypairs = [k["name"] for k in self.allowed_values["allowed_keypairs"]]
-            #     if user_input.lower() not in ["no", "new"]:
-            #         matched_keypair = self.fuzzy_match(user_input, keypairs)
-            #         if matched_keypair:
-            #             selected = next(k for k in self.allowed_values["allowed_keypairs"]
-            #                         if k["name"].lower() == matched_keypair.lower())
-            #             data["public_key"] = selected
-                    
-
-            # elif step == "keypair_creation":
-            #     data["new_publickey_name"] = user_input.strip()
-            #     data["public_key"] = user_input.strip()
+        
             
             
             elif step == "public_key":

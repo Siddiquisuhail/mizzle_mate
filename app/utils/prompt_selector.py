@@ -1,6 +1,3 @@
-from app.models.instance_models import InstanceRequest
-
-
 
 def prompt_selector(type: str) -> str: 
    if type == "general":
