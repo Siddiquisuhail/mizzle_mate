@@ -1,4 +1,5 @@
-# from app.utils.orchestrator import Orchestrator
+# Import necessary libraries
+from fuzzywuzzy import process  # For fuzzy matching
 import redis
 from app.models.chat_models import UserQuery, ChatResponse
 from app.models.instance_models import InstanceRequest
@@ -8,11 +9,10 @@ import re
 import requests
 from typing import Dict
 
-
-
-# orchestrator = Orchestrator()
+# Redis client initialization
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
 
+# Hardcoded security group
 HARDCODED_SECURITY_GROUP = {
     "name": "default",
     "description": "default description",
@@ -30,333 +30,482 @@ HARDCODED_SECURITY_GROUP = {
     ]
 }
 
+# WorkflowState class to manage the state of the workflow
 class WorkflowState:
     def __init__(self):
         self.instance_data = {"packages": {}}
         self.current_step = "start"
         self.next_step = None
         self.response = None
+        self.retry_count = 0  # Track retries for fallback mechanism
 
+
+# Instance_Creation class to handle the instance creation workflow
 class Instance_Creation:
     def __init__(self, query: UserQuery):
         self.redis_client = redis_client
-        # self.llm = orchestrator.instance_creation_query_handler()
         self.allowed_values = fetch_allowed_values(query.jwt_token)
         self.query = query
         self.jwt_token = query.jwt_token
+        self.public_key_name = None
         self.public_key_download = None
-
+        self.cms = None
+        self.database = None
+        self.language = None
+        self.platform = None
     # Step Handlers ----------------------------------------------------------
-    
+
     def ask_for_project(self, state):
         projects = [project["name"] for project in self.allowed_values["allowed_projects"]]
-        print("#########################")
-        print("projects: ", projects)
-        print("#########################")
-        state.response = f"In which project do you want to create the instance? Allowed projects: {', '.join(projects)}"
+        state.response = f"**In which project do you want to create the instance?**\n\nAvailable projects: **{', '.join(projects)}**"
         state.current_step = "project"
         return state
-    
-    
+
     def ask_for_instance_name(self, state):
-        state.response = "Please provide the instance name:"
+        state.response = "**Please provide the instance name:**"
         state.current_step = "instance_name"
         return state
 
     def ask_for_location(self, state):
         zones = [zone["zone"] for zone in self.allowed_values["allowed_zones"]]
-        state.response = f"Allowed locations: {', '.join(zones)}"
+        state.response = f"**Available locations:**\n\n**{', '.join(zones)}**"
         state.current_step = "location"
         return state
 
     def ask_for_prepackage_or_custom(self, state):
-        state.response = "Choose instance type (Prepackage/Custom):"
-        state.current_step = "prepackage_or_custom"
+        state.response = "**Would you like to use a pre-configured instance (Prepackage) or customize it?**\n\n- **Prepackage**\n- **Custom**"
+        state.current_step = "prepackage_or_custom" 
         return state
 
     def ask_for_instance_type(self, state):
         instances = "\n".join([
-            f"- {i['name']} (${i['price']}/{i['periodicity']}, "
+            f"- **{i['name']}** (${i['price']}/{i['periodicity']}, "
             f"{i['memmory_size']}GB RAM, {i['storage_size']}GB Storage, "
             f"{i['vcpu']} vCPU)"
             for i in self.allowed_values["instance_types"]
         ])
-        state.response = f"Available instances:\n{instances}"
+        state.response = f"**Choose one of the following instances pre-configured available for you:**\n\n{instances}"
         state.current_step = "instance_type"
         return state
 
     def ask_for_custom_instance_details(self, state):
-        state.response = "Enter memory(GB), storage(GB), vCPU (comma-separated):"
+        state.response = "**Enter the memory(GB), storage(GB), vCPU (comma-separated):**"
         state.current_step = "custom_instance_details"
         return state
 
     def ask_for_platform_os(self, state):
         os_list = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["os"]]
-        state.response = f"Available OS: {', '.join(os_list)}"
+        state.response = f"**Choose one of the following OS available for you:**\n\n**{', '.join(os_list)}**"
         state.current_step = "platform_os"
         return state
 
     def ask_for_platform_os_version(self, state):
         current_os = next(
-            (os for os in self.allowed_values["allowed_packages"][-1]["os"] 
+            (os for os in self.allowed_values["allowed_packages"][-1]["os"]
              if os["name"].lower() == state.instance_data["platform"]["name"].lower()),
             None
         )
         if current_os:
             versions = ", ".join(current_os["versions"])
-            state.response = f"Available versions for {current_os['name']}: {versions}"
+            state.response = f"**Choose one of the following versions available for {current_os['name']}:**\n\n**{versions}**"
             state.current_step = "platform_os_version"
         return state
-    
-    
+
     def ask_for_database(self, state):
-        # Collect all database names
         databases = []
         for package in self.allowed_values["allowed_packages"]:
             if "databases" in package:
                 databases.extend([db["name"] for db in package["databases"]])
-
-        print("#########################")
-        print("databases: ", databases)
-        print("#########################")
-        state.response = f"Install database? (No/{'/'.join(databases)})"
+        state.response = f"**Would you like to install a database?**\n\n**If yes, choose one of the following databases available for you:**\n\n**{'/ '.join(databases)}**"
         state.current_step = "database"
         return state
 
     def ask_for_database_version(self, state):
         current_db = None
-        # Search for the selected database and fetch available versions
         for package in self.allowed_values["allowed_packages"]:
             if "databases" in package:
                 current_db = next(
                     (db for db in package["databases"]
-                    if db["name"].lower() == state.instance_data["packages"]["databases"]["name"].lower()),
+                     if db["name"].lower() == state.instance_data["packages"]["databases"]["name"].lower()),
                     None
                 )
                 if current_db:
                     break
-
         if current_db:
             versions = ", ".join(current_db["versions"])
-            state.response = f"Available versions for {current_db['name']}: {versions}"
+            state.response = f"**Choose one of the following versions available for {current_db['name']}:**\n\n**{versions}**"
             state.current_step = "database_version"
         return state
 
     def ask_for_cms(self, state):
-        # Collect all CMS names
         cms_list = []
         for package in self.allowed_values["allowed_packages"]:
             if "cms" in package:
                 cms_list.extend([cms["name"] for cms in package["cms"]])
-
-        state.response = f"Install CMS? (No/{'/'.join(cms_list)})"
+        state.response = f"**Would you like to install a CMS?**\n\n**If yes, choose one of the following CMS available for you:**\n\n**{'/ '.join(cms_list)}**"
         state.current_step = "cms"
         return state
 
     def ask_for_cms_version(self, state):
         current_cms = None
-        # Search for the selected CMS
         for package in self.allowed_values["allowed_packages"]:
             if "cms" in package:
                 current_cms = next(
                     (cms for cms in package["cms"]
-                    if cms["name"].lower() == state.instance_data["packages"]["cms"]["name"].lower()),
+                     if cms["name"].lower() == state.instance_data["packages"]["cms"]["name"].lower()),
                     None
                 )
                 if current_cms:
                     break
-
         if current_cms:
-            # Assuming 'versions' key might be missing for CMS
             versions = "No versions available"  # Default if versions are not specified
-            state.response = f"Available versions for {current_cms['name']}: {versions}"
+            state.response = f"**Choose one of the following versions available for {current_cms['name']}:**\n\n**{versions}**"
             state.current_step = "cms_version"
         return state
 
     def ask_for_language(self, state):
-        # Collect all programming language names
         langs = []
         for package in self.allowed_values["allowed_packages"]:
             if "programming_languages" in package:
                 langs.extend([lang["name"] for lang in package["programming_languages"]])
-
-        state.response = f"Install language? (No/{'/'.join(langs)})"
+        state.response = f"**Would you like to install a programming language?**\n\n**If yes, choose one of the following programming languages available for you:**\n\n**{'/ '.join(langs)}**"
         state.current_step = "language"
         return state
 
     def ask_for_language_version(self, state):
         current_lang = None
-        # Search for the selected programming language
         for package in self.allowed_values["allowed_packages"]:
             if "programming_languages" in package:
                 current_lang = next(
                     (lang for lang in package["programming_languages"]
-                    if lang["name"].lower() == state.instance_data["packages"]["programming_languages"]["name"].lower()),
+                     if lang["name"].lower() == state.instance_data["packages"]["programming_languages"]["name"].lower()),
                     None
                 )
                 if current_lang:
                     break
-
         if current_lang:
             versions = ", ".join(current_lang["versions"])
-            state.response = f"Available versions for {current_lang['name']}: {versions}"
+            state.response = f"**Choose one of the following versions available for {current_lang['name']}:**\n\n**{versions}**"
             state.current_step = "language_version"
         return state
 
-
     def ask_for_instance_count(self, state):
-        state.response = "How many instances do you need?"
+        state.response = "**How many instances do you need?**"
         state.current_step = "instance_count"
         return state
-    
-    
-    
+
     def ask_for_public_key(self, state):
         keypairs = [zone["name"] for zone in self.allowed_values["allowed_keypairs"]]
-        state.response = f"You can either select from the list or create a new one? (No/{'/'.join(keypairs)}).\n \n If you want to create a new one, please provide a name for the new keypair:"
+        state.response = f"**Available options for existing keys:**\n\n**{'/  '.join(keypairs)}**\n\nIf you want to create a new one, please provide a name for the new keypair:"
         state.current_step = "public_key"
         return state
 
     def ask_for_keypair_creation(self, state):
-        state.response = "Please provide a name for the new keypair:"
+        state.response = "**Please provide a name for the new keypair:**"
         state.current_step = "keypair_creation"
         return state
-    
+
     def ask_for_keypair_creation_download(self, state):
-        state.response = f"Please download the keypair and save it in the root directory of the instance.\n\n {self.public_key_download}"
+        state.response = f"**Please download the keypair and save it in the root directory of the instance.**\n\n**{self.public_key_download}**"
         state.current_step = "keypair_creation_download"
         return state
-    
-    
+
+    def ask_for_validation(self, state):
+        state.response = "**Please review the following inputs:**\n\n"
+        for key, value in state.instance_data.items():
+            state.response += f"- **{key}**: {value}\n"
+        state.response += "\nType **'confirm'** to proceed or **'restart'** to start over."
+        state.current_step = "validation"
+        return state
+
     # Input Processing --------------------------------------------------------
+
+    def fuzzy_match(self, input_value, allowed_values):
+        """Fuzzy match input value to allowed values."""
+        matches = process.extract(input_value, allowed_values, limit=1)
+        return matches[0][0] if matches else None
+
     def process_input(self, state: WorkflowState, user_input: str):
         step = state.current_step
         data = state.instance_data
 
         try:
             if step == "instance_name":
+                if not user_input.strip():
+                    raise ValueError("Instance name cannot be empty.")
                 data["instance_name"] = user_input.strip()
-                
+
             elif step == "project":
-                selected = next(p for p in self.allowed_values["allowed_projects"]
-                               if p["name"].lower() == user_input.lower())
-                data["project"] = selected["id"]
-                
+                projects = [p["name"] for p in self.allowed_values["allowed_projects"]]
+                matched_project = self.fuzzy_match(user_input, projects)
+                if matched_project:
+                    selected = next(p for p in self.allowed_values["allowed_projects"]
+                                   if p["name"].lower() == matched_project.lower())
+                    data["project"] = selected["id"]
+                else:
+                    raise ValueError(f"No match found for '{user_input}'. Allowed projects: {', '.join(projects)}")
+
             elif step == "location":
-                selected = next(z for z in self.allowed_values["allowed_zones"] 
-                               if z["zone"].lower() == user_input.lower())
-                data["server_zone_code"] = selected["zone_code"]
-                
-            elif step == "project":
-                selected = next(z for z in self.allowed_values["allowed_projects"] 
-                               if z["name"].lower() == user_input.lower())
-                data["project"] = selected["id"]
-                
+                zones = [z["zone"] for z in self.allowed_values["allowed_zones"]]
+                matched_zone = self.fuzzy_match(user_input, zones)
+                if matched_zone:
+                    selected = next(z for z in self.allowed_values["allowed_zones"]
+                                   if z["zone"].lower() == matched_zone.lower())
+                    data["server_zone_code"] = selected["zone_code"]
+                else:
+                    raise ValueError(f"No match found for '{user_input}'. Allowed zones: {', '.join(zones)}")
+
             elif step == "prepackage_or_custom":
                 if user_input.lower() not in ["prepackage", "custom"]:
-                    raise ValueError("Invalid choice")
+                    raise ValueError("Invalid choice. Choose 'Prepackage' or 'Custom'.")
                 data["type"] = user_input.lower()
-                
+
             elif step == "instance_type":
-                selected = next(i for i in self.allowed_values["instance_types"]
-                               if i["name"].lower() == user_input.lower())
-                data["instance_type"] = selected["name"]
-                
+                instances = [i["name"] for i in self.allowed_values["instance_types"]]
+                matched_instance = self.fuzzy_match(user_input, instances)
+                if matched_instance:
+                    selected = next(i for i in self.allowed_values["instance_types"]
+                                   if i["name"].lower() == matched_instance.lower())
+                    data["instance_type"] = selected["name"]
+                else:
+                    raise ValueError(f"No match found for '{user_input}'. Allowed instances: {', '.join(instances)}")
+
             elif step == "custom_instance_details":
                 parts = [float(x.strip()) for x in user_input.split(",")]
                 if len(parts) != 3:
-                    raise ValueError("Need 3 values")
+                    raise ValueError("Need 3 values: memory(GB), storage(GB), vCPU.")
                 data["custom_instance_type"] = {
                     "memmory_size": parts[0],
                     "storage_size": parts[1],
                     "vcpu": parts[2]
                 }
-                
+
             elif step == "platform_os":
-                selected = next(os for os in self.allowed_values["allowed_packages"][-1]["os"]
-                               if os["name"].lower() == user_input.lower())
-                data["platform"] = {"name": selected["name"]}
+                os_list = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["os"]]
+                matched_os = self.fuzzy_match(user_input, os_list)
+                if matched_os:
+                    selected = next(os for os in self.allowed_values["allowed_packages"][-1]["os"]
+                                   if os["name"].lower() == matched_os.lower())
+                    data["platform"] = {"name": selected["name"]}
+                    self.platform = selected["name"]
+                else:
+                    raise ValueError(f"No match found for '{user_input}'. Allowed OS: {', '.join(os_list)}")
+                
+            
                 
             elif step == "platform_os_version":
-                print("#########################")
-                print("before_os_version_data: ", data)
-                print("#########################")
-                data["platform"]["version"] = user_input.strip()
-                print("#########################")
-                print("after_os_version_data: ", data)
-                print("#########################")
+                current_os = None
+                for package in self.allowed_values["allowed_packages"]:
+                    if "os" in package:
+                        current_os = next(
+                            (os for os in package["os"]
+                            if os["name"].lower() == data["platform"]["name"].lower()),
+                            None
+                        )
+                        if current_os:
+                            break
+                print("current_os: ", current_os)
+                print("content of current_os: ", current_os.get("versions", []))
+                if current_os and user_input.strip() in current_os.get("versions", []):
+                    data["platform"]["version"] = user_input.strip()
+                else:
+                    raise ValueError(f"Invalid version. Allowed versions for {self.database}: {', '.join(current_db.get('versions', []))}")
                 
-            elif step == "ask_for_database":
-                if user_input.lower() != "no":
+
+            
+            elif step == "database":
+                print("user_input: ", user_input)
+                if "no" not in user_input.lower().strip().split():  # Simplified check for "no"
                     databases = []
                     for package in self.allowed_values["allowed_packages"]:
                         if "databases" in package:
-                            databases.extend([db["name"] for db in package["databases"]])
-                    selected = next(db for db in databases
-                                   if db.lower() == user_input.lower())
-                    data["packages"].setdefault("databases", []).append({"name": selected})
+                            databases.extend(package["databases"])  # Retaining original structure
+
+                    print("databases: ", databases)
                     
-            elif step == "ask_for_database_version":
-                print("#########################")
-                print("before_database_version_data: ", data)
-                print("#########################")
-                data["packages"]["databases"]["version"] = user_input.strip()
-                print("#########################")
-                print("after_database_version_data: ", data)
-                print("#########################")
-                
-            elif step == "ask_for_cms":
-                if user_input.lower() != "no":
+                    matched_db = self.fuzzy_match(user_input, [db["name"] for db in databases])
+                    print("matched_db: ", matched_db)
+                    
+                    if matched_db:
+                        # selected = next(db for db in databases if db["name"].lower() == matched_db.lower())
+                        data["packages"]["databases"] = {"name": matched_db}
+                        self.database = matched_db
+                    else:
+                        # Raise an exception if no match is found
+                        allowed_databases = ', '.join([db["name"] for db in databases])
+                        raise ValueError(f"No match found for '{user_input}'. Allowed databases: {allowed_databases}")
+                else:
+                    pass  # Do nothing if the input is "no"
+
+                                  
+            
+            elif step == "database_version":
+                current_db = None
+                for package in self.allowed_values["allowed_packages"]:
+                    if "databases" in package:
+                        current_db = next(
+                            (db for db in package["databases"]
+                            if db["name"].lower() == data["packages"]["databases"]["name"].lower()),
+                            None
+                        )
+                        if current_db:
+                            break
+                print("current_db: ", current_db)
+                print("content of current_db: ", current_db.get("versions", []))
+                if current_db and user_input.strip() in current_db.get("versions", []):
+                    # data["packages"]["databases"]['name'] = selected["name"]
+                    data["packages"]["databases"]["version"] = user_input.strip()
+                else:
+                    raise ValueError(f"Invalid version. Allowed versions for {self.database}: {', '.join(current_db.get('versions', []))}")
+
+
+
+            elif step == "cms":
+                if "no" not in user_input.lower().strip().split():
                     cms_list = []
                     for package in self.allowed_values["allowed_packages"]:
                         if "cms" in package:
                             cms_list.extend([cms["name"] for cms in package["cms"]])
-                    selected = next(cms for cms in cms_list
-                                   if cms.lower() == user_input.lower())
-                    data["packages"].setdefault("cms", []).append({"name": selected})
+                    # cms_list = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["cms"]]
+                    matched_cms = self.fuzzy_match(user_input, cms_list)
+                    if matched_cms:
+                        # selected = next(os for os in cms_list
+                        #             if os["name"].lower() == matched_cms.lower())
+                        data["packages"]["cms"] = {"name": matched_cms}
+                        self.cms = matched_cms
+                    else:   
+                        allowed_cms = ', '.join([cms["name"] for cms in cms_list])
+                        raise ValueError(f"No match found for '{user_input}'. Allowed CMS: {allowed_cms}")
                     
-            elif step == "ask_for_cms_version":
-                data["packages"]["cms"]["version"] = user_input.strip()
-                
-            elif step == "ask_for_language":
-                if user_input.lower() !=  "no":
+                    
+            elif step == "cms_version":
+                current_cms = None
+                for package in self.allowed_values["allowed_packages"]:
+                    if "cms" in package:
+                        current_cms = next(
+                            (cms for cms in package["cms"]
+                            if cms["name"].lower() == data["packages"]["cms"]["name"].lower()),
+                            None
+                        )   
+                        if current_cms:
+                            break
+                if current_cms and user_input.strip() in current_cms.get("versions", []):
+                    data["packages"]["cms"]["version"] = user_input.strip()
+                else:
+                    raise ValueError(f"Invalid version. Allowed versions for {current_cms['name']}: {', '.join(current_cms.get('versions', []))}")
+                    
+
+
+            elif step == "language":
+                if "no" not in user_input.lower().strip().split():
                     langs = []
                     for package in self.allowed_values["allowed_packages"]:
                         if "programming_languages" in package:
                             langs.extend([lang["name"] for lang in package["programming_languages"]])
-                    selected = next(lang for lang in langs
-                                   if lang.lower() == user_input.lower())
-                    data["packages"].setdefault("programming_languages", []).append({"name": selected})
-                    
-            elif step == "ask_for_language_version":
-                data["packages"]["programming_languages"]["version"] = user_input.strip()
-                
-                
-            elif step == "ask_for_public_key":
-                try:
-                    selected = next(p for p in self.allowed_values["allowed_keypairs"]
-                                if p["name"].lower() == user_input.lower())
-                    data["public_key"] = user_input.strip()
-                except StopIteration:
-                    pass
-    
-            elif step == "ask_for_keypair_creation":
-                data["new_publickey_name"] = user_input.strip()
-                    
-            elif step == "ask_for_instance_count":
-                data["instance_count"] = int(user_input.strip())
-                
+                    # langs = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["programming_languages"]]
+                    matched_lang = self.fuzzy_match(user_input, langs)
+                    if matched_lang:
+                        # selected = next(os for os in langs
+                        #                 if os["name"].lower() == matched_lang.lower())
+                        data["packages"]["programming_languages"] = {"name": matched_lang}
+                        self.language = matched_lang    
+                    else:   
+                        allowed_langs = ', '.join([lang["name"] for lang in langs])
+                        raise ValueError(f"No match found for '{user_input}'. Allowed languages: {allowed_langs}")
             
-                
+            
+            elif step == "language_version":
+                current_lang = None
+                for package in self.allowed_values["allowed_packages"]:
+                    if "programming_languages" in package:
+                        current_lang = next(
+                            (lang for lang in package["programming_languages"]
+                            if lang["name"].lower() == data["packages"]["programming_languages"]["name"].lower()),
+                            None
+                        )
+                        if current_lang:
+                            break
+                if current_lang and user_input.strip() in current_lang["versions"]:
+                    data["packages"]["programming_languages"]["version"] = user_input.strip()
+                else:
+                    raise ValueError(f"Invalid version. Allowed versions for {current_lang['name']}: {', '.join(current_lang['versions'])}")
+            
+
+            # elif step == "language_version":
+            #     language_version_list = []
+            #     for package in self.allowed_values["allowed_packages"][self.language]:
+            #         if "programming_languages" in package:
+            #             language_version_list.extend([lang["versions"] for lang in package["programming_languages"]])
+            #     print("language_version_list: ", language_version_list) 
+            #     matched_lang = self.fuzzy_match(user_input, language_version_list)
+            #     if matched_lang:
+            #         data["packages"]["programming_languages"]["version"] = matched_lang
+            #     else:
+            #         raise ValueError(f"No match found for '{user_input}'. Allowed languages: {', '.join(language_version_list)}")
+                # data["packages"]["programming_languages"]["version"] = user_input.strip()
+
+            # elif step == "public_key":
+            #     keypairs = [k["name"] for k in self.allowed_values["allowed_keypairs"]]
+            #     if user_input.lower() not in ["no", "new"]:
+            #         matched_keypair = self.fuzzy_match(user_input, keypairs)
+            #         if matched_keypair:
+            #             selected = next(k for k in self.allowed_values["allowed_keypairs"]
+            #                         if k["name"].lower() == matched_keypair.lower())
+            #             data["public_key"] = selected
+                    
+
+            # elif step == "keypair_creation":
+            #     data["new_publickey_name"] = user_input.strip()
+            #     data["public_key"] = user_input.strip()
+            
+            
+            elif step == "public_key":
+                if ['new'] not in user_input.lower().strip().split():
+                    keypairs = [k["name"] for k in self.allowed_values["allowed_keypairs"]]
+                    matched_keypair = self.fuzzy_match(user_input, keypairs)
+                    if matched_keypair:
+                        selected = next(k for k in self.allowed_values["allowed_keypairs"]
+                                        if k["name"].lower() == user_input.lower())
+                        data["public_key"] = selected
+                    else:
+                        allowed_keypairs = ', '.join([k["name"] for k in keypairs])
+                        raise ValueError(f"No match found for '{user_input}'. Allowed keypairs: {allowed_keypairs}")
+
+            elif step == "keypair_creation":
+                if not user_input.strip():
+                    raise ValueError("Keypair name cannot be empty.")
+                data["new_publickey_name"] = user_input.strip()
+                data["public_key"] = user_input.strip()  # Update instance['public_key'] with the new key name
+                state.current_step = "keypair_creation_download"
+
+            elif step == "instance_count":  
+                data["instance_count"] = int(user_input.strip())
+
+            elif step == "validation":
+                if user_input.lower() == "confirm":
+                    state.response = "Instance configuration complete!"
+                    state.current_step = "finalize"
+                elif user_input.lower() == "restart":
+                    state = WorkflowState()  # Restart the workflow
+                    state.response = "Restarting the workflow. Please provide the project name."
+                else:
+                    raise ValueError("Invalid input. Type 'confirm' or 'restart'.")
+
+            # Reset retry count on successful input
+            state.retry_count = 0
+
         except (ValueError, StopIteration) as e:
-            state.response = f"Invalid input: {str(e)}. Please try again."
-            return state
+            state.retry_count += 1
+            if state.retry_count >= 3:
+                state = WorkflowState()  # Restart the workflow
+                state.response = "Maximum retries reached. Restarting the workflow. Please provide the project name."
+            else:
+                state.response = f"**Invalid input:** {str(e)}\n\nPlease try again. You have {3 - state.retry_count} retries left."
 
         return state
 
     # Workflow Management -----------------------------------------------------
-    
-    
+
     def get_next_step(self, current_step, instance_data):
         transitions = {
             "start": "project",
@@ -369,17 +518,16 @@ class Instance_Creation:
             ),
             "instance_type": "platform_os",
             "custom_instance_details": "platform_os",
-            "platform_os": "platform_os_version",   
+            "platform_os": "platform_os_version",
             "platform_os_version": "database",
             "database": lambda: (
-                # "database_version" if "databases" in instance_data["packages"]["databases"]
                 "database_version" if instance_data.get("packages").get("databases")
-                else "cms"  
-            ),  
+                else "cms"
+            ),
             "database_version": "cms",
             "cms": lambda: (
                 # "cms_version" if "cms" in instance_data["packages"]["cms"]
-                "cms_version" if     instance_data.get("packages").get("cms")
+                "cms_version" if instance_data.get("packages").get("cms")
                 else "language"
             ),
             "cms_version": "language",
@@ -394,7 +542,9 @@ class Instance_Creation:
                 else "keypair_creation"
             ),
             "keypair_creation": "keypair_creation_download",
-            "keypair_creation_download": "instance_count"
+            "keypair_creation_download": "instance_count",
+            "instance_count": "validation",
+            "validation": "finalize"
         }
         print("#########################")
         print("current_step: ", current_step)
@@ -508,8 +658,17 @@ class Instance_Creation:
             headers=headers
         )
         
-        self.public_key_download = response.text
-        return response.text
+        if response.status == "success":
+        # # Assuming the API returns the file content directly
+        #     file_content = response.text
+        #     file_name = f"{payload['keypair_name']}.pem"
+        #     with open(file_name, "w") as file:
+        #         file.write(file_content)
+        #     self.public_key_download = file_name
+        #     return file_name
+            return response
+        else:
+            return "Failed to create keypair. Please try again."
 
     def run_chat(self, query: UserQuery):
         result = self.run_workflow(query.session_id, query.text)
@@ -521,7 +680,10 @@ class Instance_Creation:
             print("#########################")
             print("Creating keypair: ", result["data"]["new_publickey_name"])
             print("#########################")
-            api_response = self.trigger_keypair_creation_api(result["data"]['new_publickey_name'])
+            try:
+                api_response = self.trigger_keypair_creation_api(result["data"] )
+            except Exception as e:
+                api_response = "Failed to create keypair. Please try again."
             print("#########################")
             print("api_response: ", api_response)
             print("#########################")
@@ -537,4 +699,3 @@ class Instance_Creation:
             return {"response": api_response}
             
         return {"response": result["response"]}
-

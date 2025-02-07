@@ -12,4 +12,6 @@ redis
 langgraph
 langchain
 langchain_huggingface
+fuzzywuzzy
+python-Levenshtein
 

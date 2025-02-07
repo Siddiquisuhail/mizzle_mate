@@ -12,6 +12,7 @@ try:
 except Exception:
     cache = {}
     
+# cache = {}
 
 
 API_ENDPOINTS = {

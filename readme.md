@@ -145,7 +145,7 @@ Have questions or need support? Reach out to us at:
 
 Follow us on social media for updates and announcements!
 
-- [Twitter](https://twitter.com/i_suhail_shl)
+- [Twitter](https://twitter.com/i_suhail_shk)
 - [LinkedIn](https://linkedin.com/in/suhail-shamim)
 
 
