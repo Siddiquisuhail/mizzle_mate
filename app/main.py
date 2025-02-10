@@ -2,12 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
 from app.models.chat_models import UserQuery, ChatResponse
-# from app.agents.instance_creation_chat  import Instance_Creation
 from app.agents.instance_creation.instance_creation_chat import Instance_Creation
 from app.agents.general_chat.general_chat import General_Chat
 import redis
-import json
-import logging
+from log.middleware import LoggingMiddleware
+from log.exception_handler import exception_handler
+from log.logging_config import logger
 
 
 
@@ -29,22 +29,32 @@ app.add_middleware(
     allow_headers=["*"],  
 )
 
+
+# Attach Logging Middleware
+app.add_middleware(LoggingMiddleware)
+
+# Attach Exception Handler
+app.add_exception_handler(Exception, exception_handler)
+
+
+
+
 @app.get("/")
-def read_root():
+async def read_root():
     return {"message": "Welcome to Mizzle Mate!"}
 
 
 
 
 @app.get("/health")
-def read_root():
+async def read_root():
     return {"message": "Health is Good!"}
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(query: UserQuery):
-    print(f"Received tag: {query.tag}") 
     if query.tag == 'general':
+        logger.info({"event": "general_chat", "message": "General chat endpoint accessed"})
         try:
             chat = General_Chat()
             response = chat.general_chat(query)
@@ -57,12 +67,11 @@ async def chat(query: UserQuery):
         
         
     elif query.tag == 'instance_creation':
-        print(f"Handling instance_creation for query: {query}") 
+        logger.info({"event": "instance_creation", "message": "Instance creation endpoint accessed"})
         try:
             chat = Instance_Creation(query)
             response = chat.run_chat(query)
             return response
-            # return 'You are at the instance creation page'
         except Exception as e: 
             raise HTTPException(status_code=500, detail=str(e))
 

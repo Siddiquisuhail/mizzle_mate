@@ -6,9 +6,19 @@ import json
 import re
 import requests
 from typing import Dict
+# from app.utils.response_processing import clean_response
+# from app.utils.orchestrator import Orchestrator
+# from app.utils.prompt_selector import prompt_selector
+from    log.logging_config import logger
+
+
 
 # Redis client initialization
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+
+
+# orchestrator = Orchestrator()
+
 
 # Hardcoded security group
 HARDCODED_SECURITY_GROUP = {
@@ -55,18 +65,21 @@ class Instance_Creation:
 
     def ask_for_project(self, state):
         projects = [project["name"] for project in self.allowed_values["allowed_projects"]]
-        state.response = f"**In which project do you want to create the instance?**\n\nAvailable projects: **{', '.join(projects)}**"
+        if len(projects) < 1:
+            state.response = f"**You need to create a project first. Please create a project and then come back to create the instance.**"
+        else:
+            state.response = f"**In which project do you want to create the instance?**\n\nAvailable projects you have access to are: \n\n**{', '.join(projects)}**"
         state.current_step = "project"
         return state
 
     def ask_for_instance_name(self, state):
-        state.response = "**Please provide the instance name:**"
+        state.response = "**What would you like to name your instance?**"
         state.current_step = "instance_name"
         return state
 
     def ask_for_location(self, state):
         zones = [zone["zone"] for zone in self.allowed_values["allowed_zones"]]
-        state.response = f"**Available locations:**\n\n**{', '.join(zones)}**"
+        state.response = f"**Choose a location for your instance. The available locations are:**\n\n**{', '.join(zones)}**"
         state.current_step = "location"
         return state
 
@@ -77,17 +90,18 @@ class Instance_Creation:
 
     def ask_for_instance_type(self, state):
         instances = "\n".join([
-            f"- **{i['name']}** (${i['price']}/{i['periodicity']}, "
+            f"- **{i['name']}** "
             f"{i['memmory_size']}GB RAM, {i['storage_size']}GB Storage, "
             f"{i['vcpu']} vCPU)"
-            for i in self.allowed_values["instance_types"]
+            f"Price: ${i['price']}/{i['periodicity']}"
+            for i in self.allowed_values["instance_types"]  
         ])
         state.response = f"**Choose one of the following instances pre-configured available for you:**\n\n{instances}"
         state.current_step = "instance_type"
         return state
 
     def ask_for_custom_instance_details(self, state):
-        state.response = "**Enter the memory(GB), storage(GB), vCPU (comma-separated):**"
+        state.response = "**What specifications do you need for your instance?**\n\n- RAM (GB)\n- Storage (GB)\n- vCPU. \n\nPlease enter the specifications in the following format: **RAM, Storage, vCPU**"
         state.current_step = "custom_instance_details"
         return state
 
@@ -105,7 +119,7 @@ class Instance_Creation:
         )
         if current_os:
             versions = ", ".join(current_os["versions"])
-            state.response = f"**Choose one of the following versions available for {current_os['name']}:**\n\n**{versions}**"
+            state.response = f"**Which version would you like to install for {current_os['name']}?**\n\n**{versions}**"
             state.current_step = "platform_os_version"
         return state
 
@@ -124,7 +138,7 @@ class Instance_Creation:
             if "databases" in package:
                 current_db = next(
                     (db for db in package["databases"]
-                     if db["name"].lower() == state.instance_data["packages"]["databases"]["name"].lower()),
+                     if db["name"].lower() == state.instance_data["packages"]["databases"][0]["name"].lower()),
                     None
                 )
                 if current_db:
@@ -150,13 +164,13 @@ class Instance_Creation:
             if "cms" in package:
                 current_cms = next(
                     (cms for cms in package["cms"]
-                     if cms["name"].lower() == state.instance_data["packages"]["cms"]["name"].lower()),
+                     if cms["name"].lower() == state.instance_data["packages"]["cms"][0]["name"].lower()),
                     None
                 )
                 if current_cms:
                     break
         if current_cms:
-            versions = "No versions available"  # Default if versions are not specified
+            versions = ", ".join(current_lang["versions"])  # Default if versions are not specified
             state.response = f"**Choose one of the following versions available for {current_cms['name']}:**\n\n**{versions}**"
             state.current_step = "cms_version"
         return state
@@ -176,7 +190,7 @@ class Instance_Creation:
             if "programming_languages" in package:
                 current_lang = next(
                     (lang for lang in package["programming_languages"]
-                     if lang["name"].lower() == state.instance_data["packages"]["programming_languages"]["name"].lower()),
+                     if lang["name"].lower() == state.instance_data["packages"]["programming_languages"][0]["name"].lower()),
                     None
                 )
                 if current_lang:
@@ -194,7 +208,7 @@ class Instance_Creation:
 
     def ask_for_public_key(self, state):
         keypairs = [zone["name"] for zone in self.allowed_values["allowed_keypairs"]]
-        state.response = f"**Available options for existing keys:**\n\n**{'/  '.join(keypairs)}**\n\nIf you want to create a new one, please provide a name for the new keypair:"
+        state.response = f"**Do you wan to create a new keypair or use an existing one?**\n\n**Available options for existing keys:**\n\n**{'/  '.join(keypairs)}**"
         state.current_step = "public_key"
         return state
 
@@ -209,7 +223,7 @@ class Instance_Creation:
         return state
 
     def ask_for_validation(self, state):
-        state.response = "**Please review the following inputs:**\n\n"
+        state.response = "**Here are you final specifications. Please review them and confirm or restart:**\n\n"
         for key, value in state.instance_data.items():
             state.response += f"- **{key}**: {value}\n"
         state.response += "\nType **'confirm'** to proceed or **'restart'** to start over."
@@ -309,41 +323,47 @@ class Instance_Creation:
                 else:
                     raise ValueError(f"Invalid version. Allowed versions for {self.database}: {', '.join(current_db.get('versions', []))}")
                 
-
             
+                
             elif step == "database":
                 print("user_input: ", user_input)
-                if "no" not in user_input.lower().strip().split():  # Simplified check for "no"
+                if "no" not in user_input.lower().strip().split():
                     databases = []
                     for package in self.allowed_values["allowed_packages"]:
                         if "databases" in package:
-                            databases.extend(package["databases"])  # Retaining original structure
+                            databases.extend(package["databases"])
 
                     print("databases: ", databases)
-                    
                     matched_db = self.fuzzy_match(user_input, [db["name"] for db in databases])
                     print("matched_db: ", matched_db)
                     
+                    # if matched_db:
+                    #     data["packages"]["databases"][0]["name"] = matched_db
+                    #     data["packages"].get("databases").append({"name": selected})
+                    
+                    
                     if matched_db:
-                        # selected = next(db for db in databases if db["name"].lower() == matched_db.lower())
-                        data["packages"]["databases"] = {"name": matched_db}
-                        self.database = matched_db
-                    else:
-                        # Raise an exception if no match is found
+                        # Ensure "databases" key exists
+                        if "databases" not in data["packages"]:
+                            data["packages"]["databases"] = []
+
+                        # Append the matched database to the list
+                        data["packages"]["databases"].append({"name": matched_db})
+                        print("#"*100)
+                        print("Data after database selection: ", data)
+                        print("#"*100)
+                        self.database = matched_db 
+                    else:   
                         allowed_databases = ', '.join([db["name"] for db in databases])
                         raise ValueError(f"No match found for '{user_input}'. Allowed databases: {allowed_databases}")
-                else:
-                    pass  # Do nothing if the input is "no"
 
-                                  
-            
             elif step == "database_version":
                 current_db = None
                 for package in self.allowed_values["allowed_packages"]:
                     if "databases" in package:
                         current_db = next(
                             (db for db in package["databases"]
-                            if db["name"].lower() == data["packages"]["databases"]["name"].lower()),
+                             if db["name"].lower() == data["packages"]["databases"][0]["name"].lower()),
                             None
                         )
                         if current_db:
@@ -351,12 +371,13 @@ class Instance_Creation:
                 print("current_db: ", current_db)
                 print("content of current_db: ", current_db.get("versions", []))
                 if current_db and user_input.strip() in current_db.get("versions", []):
-                    # data["packages"]["databases"]['name'] = selected["name"]
-                    data["packages"]["databases"]["version"] = user_input.strip()
+                    # data["packages"]["databases"][0]["version"] = user_input.strip()
+                    data["packages"].get("databases")[0]['version'] = user_input.strip()
+                    print("#"*100)
+                    print("Data after database version selection: ", data)
+                    print("#"*100)
                 else:
                     raise ValueError(f"Invalid version. Allowed versions for {self.database}: {', '.join(current_db.get('versions', []))}")
-
-
 
             elif step == "cms":
                 if "no" not in user_input.lower().strip().split():
@@ -364,13 +385,26 @@ class Instance_Creation:
                     for package in self.allowed_values["allowed_packages"]:
                         if "cms" in package:
                             cms_list.extend([cms["name"] for cms in package["cms"]])
-                    # cms_list = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["cms"]]
                     matched_cms = self.fuzzy_match(user_input, cms_list)
+                    
                     if matched_cms:
-                        # selected = next(os for os in cms_list
-                        #             if os["name"].lower() == matched_cms.lower())
-                        data["packages"]["cms"] = {"name": matched_cms}
+                        # Ensure "cms" key exists
+                        if "cms" not in data["packages"]:
+                            data["packages"]["cms"] = []
+
+                        # Append the matched database to the list
+                        data["packages"]["cms"].append({"name": matched_cms})
+                        print("#"*100)
+                        print("Data after cms selection: ", data)
+                        print("#"*100)
                         self.cms = matched_cms
+                    
+                    
+                    
+                    
+                    # if matched_cms:
+                    #     data["packages"].get("cms").append({"name": matched_cms})
+                    #     self.cms = matched_cms
                     else:   
                         allowed_cms = ', '.join([cms["name"] for cms in cms_list])
                         raise ValueError(f"No match found for '{user_input}'. Allowed CMS: {allowed_cms}")
@@ -382,17 +416,19 @@ class Instance_Creation:
                     if "cms" in package:
                         current_cms = next(
                             (cms for cms in package["cms"]
-                            if cms["name"].lower() == data["packages"]["cms"]["name"].lower()),
+                             if cms["name"].lower() == data["packages"]["cms"][0]["name"].lower()),
                             None
                         )   
                         if current_cms:
                             break
                 if current_cms and user_input.strip() in current_cms.get("versions", []):
-                    data["packages"]["cms"]["version"] = user_input.strip()
+                    data["packages"].get("cms")[0]['version'] = user_input.strip()
+                    print("#"*100)
+                    print("Data after cms version selection: ", data)
+                    print("#"*100)
                 else:
                     raise ValueError(f"Invalid version. Allowed versions for {current_cms['name']}: {', '.join(current_cms.get('versions', []))}")
                     
-
 
             elif step == "language":
                 if "no" not in user_input.lower().strip().split():
@@ -400,13 +436,17 @@ class Instance_Creation:
                     for package in self.allowed_values["allowed_packages"]:
                         if "programming_languages" in package:
                             langs.extend([lang["name"] for lang in package["programming_languages"]])
-                    # langs = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["programming_languages"]]
                     matched_lang = self.fuzzy_match(user_input, langs)
                     if matched_lang:
-                        # selected = next(os for os in langs
-                        #                 if os["name"].lower() == matched_lang.lower())
-                        data["packages"]["programming_languages"] = {"name": matched_lang}
-                        self.language = matched_lang    
+                        # Ensure "programming_languages" key exists
+                        if "programming_languages" not in data["packages"]:
+                            data["packages"]["programming_languages"] = []
+
+                        # Append the matched language to the list
+                        data["packages"]["programming_languages"].append({"name": matched_lang})
+                        print("#"*100)
+                        print("Data after language selection: ", data)
+                        print("#"*100)
                     else:   
                         allowed_langs = ', '.join([lang["name"] for lang in langs])
                         raise ValueError(f"No match found for '{user_input}'. Allowed languages: {allowed_langs}")
@@ -418,13 +458,16 @@ class Instance_Creation:
                     if "programming_languages" in package:
                         current_lang = next(
                             (lang for lang in package["programming_languages"]
-                            if lang["name"].lower() == data["packages"]["programming_languages"]["name"].lower()),
+                             if lang["name"].lower() == data["packages"]["programming_languages"][0]["name"].lower()),
                             None
                         )
                         if current_lang:
                             break
                 if current_lang and user_input.strip() in current_lang["versions"]:
-                    data["packages"]["programming_languages"]["version"] = user_input.strip()
+                    data["packages"].get("programming_languages")[0]['version'] = user_input.strip()
+                    print("#"*100)
+                    print("Data after language version selection: ", data)
+                    print("#"*100)
                 else:
                     raise ValueError(f"Invalid version. Allowed versions for {current_lang['name']}: {', '.join(current_lang['versions'])}")
         
@@ -437,7 +480,8 @@ class Instance_Creation:
                     if matched_keypair:
                         selected = next(k for k in self.allowed_values["allowed_keypairs"]
                                         if k["name"].lower() == user_input.lower())
-                        data["public_key"] = selected
+                        data["public_key"] = selected['name']
+                        logger.info({"event": "instance_creation", "message": f"Instance creation triggered with data: {data}"})
                     else:
                         allowed_keypairs = ', '.join([k["name"] for k in keypairs])
                         raise ValueError(f"No match found for '{user_input}'. Allowed keypairs: {allowed_keypairs}")
@@ -497,13 +541,11 @@ class Instance_Creation:
             ),
             "database_version": "cms",
             "cms": lambda: (
-                # "cms_version" if "cms" in instance_data["packages"]["cms"]
                 "cms_version" if instance_data.get("packages").get("cms")
                 else "language"
             ),
             "cms_version": "language",
             "language": lambda: (
-                # "language_version" if "programming_languages" in instance_data["packages"]["programming_languages"]
                 "language_version" if instance_data.get("packages").get("programming_languages")
                 else "public_key"
             ),
@@ -517,13 +559,8 @@ class Instance_Creation:
             "instance_count": "validation",
             "validation": "finalize"
         }
-        print("#########################")
-        print("current_step: ", current_step)
-        print("#########################")  
+         
         next_step = transitions.get(current_step, "finalize")
-        print("#########################")
-        print("next_step: ", next_step)
-        print("#########################")
         if callable(next_step):
             return next_step()
         return next_step
@@ -544,53 +581,87 @@ class Instance_Creation:
 
         # Determine next step
         next_step = self.get_next_step(state.current_step, state.instance_data)
-        print("#########################")
-        print("next_step: ", next_step)
-        print("#########################")
         state.current_step = next_step
 
         # Generate response
         handler = getattr(self, f"ask_for_{next_step}", None)
-        print("#########################")
-        print("handler: ", handler)
-        print("#########################")
         if handler is not None:
             state = handler(state)
-            print("#########################")
-            print("state: ", state)
-            print("#########################")  
         else:
             state.response = "Instance configuration complete!"
+            
+        # system_prompt = prompt_selector("general")
+        
+        
+
+        # llm_response = orchestrator.handle_query(state.response, system_prompt)
+        # cleaned_llm_response = clean_response(llm_response, query.text,)
 
         # Save state
         self.redis_client.set(state_key, state.current_step)
         self.redis_client.set(data_key, json.dumps(state.instance_data))
-
+        logger.info({"event": "instance_creation", "message": f"response for {session_id}: {state.response} and data: {state.instance_data}"})
         return {"response": state.response, "data": state.instance_data}
 
     # API Integration ---------------------------------------------------------
     def trigger_instance_creation_api(self, instance_data: Dict) -> str:
         # Clean up instance type data
         if "custom_instance_type" in instance_data:
-            instance_data.pop("instance_type", None)
+            instance_data.pop("type", None)
             
+        
+
+            
+        # Remove the "type" key from instance_data
         instance_data.pop("type", None)
+        
+        # Remove the "new_publickey_name" key from instance_data
         instance_data.pop("new_publickey_name", None)
+        
+        # Remove the "public_key_download" key from instance_data
         instance_data.pop("public_key_download", None)
             
         # Add hardcoded security group
         instance_data["custom_security_group"] = HARDCODED_SECURITY_GROUP
         
-        # Ensure array formats
-        for pkg_type in ["databases", "cms", "programming_languages"]:
-            instance_data["packages"][pkg_type] = instance_data["packages"].get(pkg_type, [])
+        # # Ensure array formats
+        # for pkg_type in ["databases", "cms", "programming_languages"]:
+        #     instance_data["packages"][pkg_type] = instance_data["packages"].get(pkg_type, [])
+        
+        # package_list = []
+        # for pkg_type in ["databases", "cms", "programming_languages", "applications"]:
+        #     for pkg in instance_data.get("packages", {}).get(pkg_type, []):
+        #         package_list.append({
+        #             "category": pkg_type,
+        #             "name": pkg["name"],
+        #             "version": pkg["version"]
+        #         })
+                
+        package_dict = {"packages": {}}
+
+        for pkg_type in ["databases", "cms", "programming_languages", "applications"]:
+            package_list = []
+            for pkg in instance_data.get("packages", {}).get(pkg_type, []):
+                package_list.append({
+                    "name": pkg["name"],
+                    "version": pkg["version"]
+                })
+            
+            if package_list:  # Only add non-empty categories
+                package_dict["packages"][pkg_type] = package_list
+                
+                
+        
+        
+        # Replace the "packages" structure with the list format
+        instance_data["packages"] = package_dict
+        
+        if instance_data.get("packages") == {}:
+            instance_data.pop("packages")
             
         # Add default public key if missing
         instance_data.setdefault("public_key", "DefaultKey")
         
-        print("#########################")
-        print("instance_data: ", instance_data)
-        print("#########################")
         
         headers = {
             "Authorization": f"Bearer {self.jwt_token}",
@@ -614,9 +685,6 @@ class Instance_Creation:
                         "keypair_file_format": "pem"
                         }
         
-        print("#########################")
-        print("public_key_data: ", payload)
-        print("#########################")
         
         headers = {
             "Authorization": f"Bearer {self.jwt_token}",
@@ -628,45 +696,34 @@ class Instance_Creation:
             json=payload,
             headers=headers
         )
+        return response
         
-        if response.status == "success":
-        # # Assuming the API returns the file content directly
-        #     file_content = response.text
-        #     file_name = f"{payload['keypair_name']}.pem"
-        #     with open(file_name, "w") as file:
-        #         file.write(file_content)
-        #     self.public_key_download = file_name
-        #     return file_name
-            return response
-        else:
-            return "Failed to create keypair. Please try again."
+        # if response.message == "success":
+        # # # Assuming the API returns the file content directly
+        # #     file_content = response.text
+        # #     file_name = f"{payload['keypair_name']}.pem"
+        # #     with open(file_name, "w") as file:
+        # #         file.write(file_content)
+        # #     self.public_key_download = file_name
+        # #     return file_name
+        #     return response
+        # else:
+        #     return "Failed to create keypair. Please try again."
 
     def run_chat(self, query: UserQuery):
         result = self.run_workflow(query.session_id, query.text)
-        print("#########################")
-        print("Intermediate result: ", result)
-        print("#########################")
-        
+        logger.info({"event": "instance_creation", "message": f"Instance intermediate collected data for {query.session_id}: {result['data']}"})
+
         if "new_publickey_name" in result["data"]:
-            print("#########################")
-            print("Creating keypair: ", result["data"]["new_publickey_name"])
-            print("#########################")
             try:
                 api_response = self.trigger_keypair_creation_api(result["data"] )
             except Exception as e:
                 api_response = "Failed to create keypair. Please try again."
-            print("#########################")
-            print("api_response: ", api_response)
-            print("#########################")
             return {"response": api_response}
         
         if "Instance configuration complete!" in result["response"]:
-            print("#########################")
-            print("result: ", result)
-            print("#########################")
+            logger.info({"event": "instance_creation", "message": f"Instance creation triggered with data: {result['data']}"})
             api_response = self.trigger_instance_creation_api(result["data"])
-            print("api_response: ", api_response)
-            print("#########################")
             return {"response": api_response}
             
         return {"response": result["response"]}

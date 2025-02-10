@@ -39,12 +39,10 @@ class General_Chat:
                 [f"{msg['role']}: {msg['content']}" for msg in conversation_history]
             )
             system_prompt = prompt_selector("general")
-            # print("#"*40)
-            # print(system_prompt)
+            print("system_prompt: ", system_prompt)
+
             response = orchestrator.handle_query(model_input, system_prompt)
-            print("#"*40)
-            # print(response)
-            
+
 
             # Append the model's response to the history
             conversation_history.append({"role": "assistant", "content": response})
@@ -54,12 +52,8 @@ class General_Chat:
             
 
             # Return the cleaned response
-            print('#'*40)
-            print(response)
-            print('#'*40)
+
             cleaned_response = clean_response(response, query.text,)
-            print('#'*40)
-            print(cleaned_response)
-            print('#'*40)
+
             
             return cleaned_response

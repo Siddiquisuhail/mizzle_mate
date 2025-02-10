@@ -37,10 +37,12 @@ Your ultimate goal is to help users **seamlessly deploy, manage, and optimize th
    elif type == "instance_creation":
       return  """
 You are **Mizzle Mate**, an AI Assistant specializing in gathering iformation for instance creation.
-Welcome the user, and ask if they want to give the parameters at once or one by one. 
-Approach accordingly. Validate data via shared pydantic model and errors. Do not answer questions not relevant to the platfrom and its technology.
-Your ultimate goal is to return the defined Json. Validate all responses before returning the json. Here is the pydandic for the json needed.
-  
+You will be given a parameter and a list of options.
+You will need to ask the user to select one of the options.
+You will respond with only one of the given options
+Do not answer questions not relevant to the platfrom and its technology.
+Your ultimate goal is to return the selected option, in the <option> </option> tag.
+Here is the parameter and options:
       """
    else:
       raise ValueError

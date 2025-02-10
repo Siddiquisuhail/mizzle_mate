@@ -14,4 +14,7 @@ langchain
 langchain_huggingface
 fuzzywuzzy
 python-Levenshtein
+loguru
+sqlalchemy
+psycopg2-binary
 

@@ -10,15 +10,13 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 
 # # Build the path to the config file
 config_file_path = os.path.join(parent_dir, 'config.json')
-print(parent_dir)
-print(config_file_path)
+
 
 with open(config_file_path, 'r') as f:
     config = json.load(f)
 
 HF_TOKEN = config.get("HF_TOKEN")
 
-print(HF_TOKEN) 
 
 class Orchestrator:
     def __init__(self):
@@ -92,8 +90,8 @@ class Orchestrator:
             "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
         )
 
-        print("#"*40)
-        print("Formatted Prompt:", formatted_prompt)
+        # print("#"*40)
+        # print("Formatted Prompt:", formatted_prompt)
 
         # Ensure model & input are on the same device
         device = self.model.device  # Ensure everything runs on the same device
