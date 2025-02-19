@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi import HTTPException
 from app.models.chat_models import UserQuery, ChatResponse
 from app.agents.instance_creation.instance_creation_chat import Instance_Creation
+from app.agents.instance_creation.model import LLMEnhancedWorkflow
 from app.agents.general_chat.general_chat import General_Chat
 import redis
 from log.middleware import LoggingMiddleware
@@ -13,7 +14,8 @@ from log.logging_config import logger
 
 
 
-redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)  
+#redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)  
+
 
 
 
@@ -54,23 +56,31 @@ async def read_root():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(query: UserQuery):
     if query.tag == 'general':
-        logger.info({"event": "general_chat", "message": "General chat endpoint accessed"})
+        logger.info({"event": "general_chat", "message": "General cgeneral chat accessed"})
         try:
             chat = General_Chat()
             response = chat.general_chat(query)
-            print('#'*40)
-            print(response)
-            print('#'*40)
+            # print('#'*40)
+            # print(response)
+            # print('#'*40)
             return {"response": response}
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
         
-        
+    #     logger.info({"event": "instance_creation", "message": "Instance creation endpoint accessed"})
+    #     try:
+    #         chat = Instance_Creation(query)
+    #         response = chat.run_chat(query)
+    #         return response
+    #     except Exception as e: 
+    #         raise HTTPException(status_code=500, detail=str(e))
+    
+    
     elif query.tag == 'instance_creation':
         logger.info({"event": "instance_creation", "message": "Instance creation endpoint accessed"})
-        try:
-            chat = Instance_Creation(query)
-            response = chat.run_chat(query)
+        try:    
+            workflow = Instance_Creation(query)
+            response = workflow.run_chat(query)
             return response
         except Exception as e: 
             raise HTTPException(status_code=500, detail=str(e))

@@ -23,7 +23,7 @@ def json_formatter(record):
 logger.remove()
 
 # Console Logging (JSON)
-logger.add(sys.stdout, format="{message}", serialize=True, level="DEBUG")
+# logger.add(sys.stdout, format="{message}", serialize=True, level="DEBUG")
 
 # File Logging (Daily rotation, store up to 7 days)
 logger.add("logs/app.json", rotation="1 day", retention="7 days", format="{message}", serialize=True, level="DEBUG")

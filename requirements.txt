@@ -17,4 +17,5 @@ python-Levenshtein
 loguru
 sqlalchemy
 psycopg2-binary
-
+bitsandbytes
+spacy

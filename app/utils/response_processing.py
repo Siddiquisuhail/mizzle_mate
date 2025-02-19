@@ -31,8 +31,8 @@ def clean_response(response: str, prompt: str) -> str:
 
     # response = "\n".join(assistant_response).strip()
     # response = response.split('user: ')[-1].replace(prompt , "").replace("</think>", "")
-    # response = response.split("nassistant")[-1].replace(prompt , "").replace("</think>", "")
-    # print(response)
+    response = response.split("nassistant")[-1].replace(prompt , "").replace("</think>", "")
+    print(response)
     return response
 
 def clean_instance_creation_response(response: str, prompt: str) -> str:
@@ -44,7 +44,8 @@ def clean_instance_creation_response(response: str, prompt: str) -> str:
     ##############################################
     
     response = response.split("</think>")[-1]
-    response = response.split("<option>")[-1]
+    response = response.replace("<|begin_of_text|>system", "").replace(prompt , "").replace("</think>", "")
+    # response = response.split("<option>")[-1]
     # response = "\n".join(assistant_response).strip()
     # response = response.split('user: ')[-1].replace(prompt , "").replace("</think>", "")
     # response = response.split("nassistant")[-1].replace(prompt , "").replace("</think>", "")

@@ -10,8 +10,10 @@ from typing import Dict
 # from app.utils.orchestrator import Orchestrator
 # from app.utils.prompt_selector import prompt_selector
 from    log.logging_config import logger
-
-
+import random
+import spacy
+from spacy.training.example import Example
+from word2number import w2n
 
 # Redis client initialization
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
@@ -61,6 +63,7 @@ class Instance_Creation:
         self.database = None
         self.language = None
         self.platform = None
+        self.nlp = spacy.load('en_core_web_lg')
     # Step Handlers ----------------------------------------------------------
 
     def ask_for_project(self, state):
@@ -170,7 +173,7 @@ class Instance_Creation:
                 if current_cms:
                     break
         if current_cms:
-            versions = ", ".join(current_lang["versions"])  # Default if versions are not specified
+            versions = ", ".join(current_cms["versions"])  # Default if versions are not specified
             state.response = f"**Choose one of the following versions available for {current_cms['name']}:**\n\n**{versions}**"
             state.current_step = "cms_version"
         return state
@@ -234,8 +237,58 @@ class Instance_Creation:
 
     def fuzzy_match(self, input_value, allowed_values):
         """Fuzzy match input value to allowed values."""
-        matches = process.extract(input_value, allowed_values, limit=1)
-        return matches[0][0] if matches else None
+        min_score = 60
+        best_matches = process.extractOne(input_value, allowed_values, scorer=process.fuzz.ratio, score_cutoff=min_score)
+        if best_matches:
+            return best_matches[0]
+        else:
+            raise ValueError('No Match found.')
+        #matches = process.extract(input_value, allowed_values, limit=1, scorer=process.fuzz.ratio)
+        #return matches[0][0] if matches else None
+    
+    def remove_stop_words(self, sentence):
+        """This function will remove the stop words"""
+        stop_words = spacy.lang.en.stop_words.STOP_WORDS  
+        doc = self.nlp(sentence) 
+  
+        # Use a list comprehension to remove stop words 
+        filtered_tokens = [token for token in doc if not token.is_stop] 
+        
+        # Join the filtered tokens back into a sentence 
+        return ' '.join([token.text for token in filtered_tokens])
+
+    def nlp_fuzzy(self, text):
+        """ This funciton will only be responsible for parsing and extracting values from the text"""
+        entities = {}
+        doc = self.nlp(text)
+        #filtered_tokens = [token for token in doc if not token.is_stop] 
+        #nlp_text= spacy.tokens.Doc(self.nlp.vocab, words = [token.text for token in filtered_tokens])
+        # nlp_text = ' '.join([token.text for token in filtered_tokens])
+        #nlp_text = self.nlp(nlp_text)
+        print(doc)
+        print('#'*100)
+        for ent in doc.ents:
+            if ent.label_ in entities.keys():
+                entities[ent.label_].append(ent.text)
+            else:
+                entities[ent.label_] = [ent.text]
+       
+        return entities
+
+        
+    def list_to_int(self, lst):
+        result = []
+        for item in lst:
+            if item.replace(".", "").isdigit():  # Check if item is a number
+                result.append(item)
+            else:  # Convert word to number
+                try:
+                    result.append(w2n.word_to_num(item))
+                except ValueError:
+                    raise ValueError(f"Cannot convert '{item}' to a number")
+        return result
+
+
 
     def process_input(self, state: WorkflowState, user_input: str):
         step = state.current_step
@@ -248,6 +301,7 @@ class Instance_Creation:
                 data["instance_name"] = user_input.strip()
 
             elif step == "project":
+                user_input = self.remove_stop_words(user_input)
                 projects = [p["name"] for p in self.allowed_values["allowed_projects"]]
                 matched_project = self.fuzzy_match(user_input, projects)
                 if matched_project:
@@ -256,24 +310,64 @@ class Instance_Creation:
                     data["project"] = selected["id"]
                 else:
                     raise ValueError(f"No match found for '{user_input}'. Allowed projects: {', '.join(projects)}")
-
+                
+                
+                
             elif step == "location":
-                zones = [z["zone"] for z in self.allowed_values["allowed_zones"]]
-                matched_zone = self.fuzzy_match(user_input, zones)
-                if matched_zone:
-                    selected = next(z for z in self.allowed_values["allowed_zones"]
-                                   if z["zone"].lower() == matched_zone.lower())
-                    data["server_zone_code"] = selected["zone_code"]
-                else:
-                    raise ValueError(f"No match found for '{user_input}'. Allowed zones: {', '.join(zones)}")
 
+                zones = [z["zone"] for z in self.allowed_values["allowed_zones"]]
+
+                print('user_input', user_input)
+                ner_data = self.nlp_fuzzy(user_input)
+                print('first_print', ner_data)
+                print('#' * 100)
+
+                try:
+                    # Check if 'GPE' exists in ner_data
+                    if 'GPE' not in ner_data or not ner_data['GPE']:
+                        raise ValueError(f"No location detected in 'user_input'. Allowed zones: {', '.join(zones)}")
+
+                    # Get the first GPE value (assuming it's the most relevant)
+                    zone = ner_data['GPE'][0]  # Take the first value if there are multiple
+                    print('Detected zone:', zone)
+
+                    # Perform fuzzy matching
+                    matched_zone = self.fuzzy_match(zone, zones)
+                    print('#' * 100)
+                    print('second_print', matched_zone)
+
+                    if matched_zone:
+                        # Find the corresponding zone in allowed_zones
+                        selected = next((z for z in self.allowed_values["allowed_zones"]
+                                        if z["zone"].lower() == matched_zone.lower()), None)
+                        if selected:
+                            data["server_zone_code"] = selected["zone_code"]
+                        else:
+                            raise ValueError(f"No match found for '{matched_zone}'. Allowed zones: {', '.join(zones)}")
+                    else:
+                        raise ValueError(f"No match found for '{zone}'. Allowed zones: {', '.join(zones)}")
+
+                except KeyError as e:
+                    raise ValueError(f"KeyError: {e}. Unable to process location data.")
+                except StopIteration:
+                    raise ValueError(f"No matching zone found for '{matched_zone}'. Allowed zones: {', '.join(zones)}")
+                except Exception as e:
+                    raise ValueError(f"An error occurred while processing location: {e}")   
+          
+          
+          
             elif step == "prepackage_or_custom":
-                if user_input.lower() not in ["prepackage", "custom"]:
+                try:
+                    if "prepackage" in user_input.lower().split():
+                        data["type"] = 'prepackage'
+                    elif "custom" in user_input.lower().split():
+                        data["type"] = 'custom' 
+                except:        
                     raise ValueError("Invalid choice. Choose 'Prepackage' or 'Custom'.")
-                data["type"] = user_input.lower()
 
             elif step == "instance_type":
                 instances = [i["name"] for i in self.allowed_values["instance_types"]]
+                user_input = self.remove_stop_words(user_input)
                 matched_instance = self.fuzzy_match(user_input, instances)
                 if matched_instance:
                     selected = next(i for i in self.allowed_values["instance_types"]
@@ -283,17 +377,28 @@ class Instance_Creation:
                     raise ValueError(f"No match found for '{user_input}'. Allowed instances: {', '.join(instances)}")
 
             elif step == "custom_instance_details":
-                parts = [float(x.strip()) for x in user_input.split(",")]
-                if len(parts) != 3:
+                input = self.nlp_fuzzy(user_input.lower())
+                print("#"*100)
+                print('input to the custom ', input)
+                data_extracted = input.get('CARDINAL',[])
+                print("#"*100)
+                print('The data', data_extracted)
+                parsed_data = self.list_to_int(data_extracted)
+                print('parsed Data', parsed_data)
+                print(type(parsed_data), parsed_data[0], parsed_data[1], parsed_data[2])
+                print(len(parsed_data))
+                # = [float(x.strip()) for x in user_input.split(",")]
+                if len(parsed_data) != 3:
                     raise ValueError("Need 3 values: memory(GB), storage(GB), vCPU.")
                 data["custom_instance_type"] = {
-                    "memmory_size": parts[0],
-                    "storage_size": parts[1],
-                    "vcpu": parts[2]
+                    "memmory_size": parsed_data[0],
+                    "storage_size": parsed_data[1],
+                    "vcpu": parsed_data[2]
                 }
 
             elif step == "platform_os":
                 os_list = [os["name"] for os in self.allowed_values["allowed_packages"][-1]["os"]]
+                user_input = self.remove_stop_words(user_input)
                 matched_os = self.fuzzy_match(user_input, os_list)
                 if matched_os:
                     selected = next(os for os in self.allowed_values["allowed_packages"][-1]["os"]
@@ -303,10 +408,10 @@ class Instance_Creation:
                 else:
                     raise ValueError(f"No match found for '{user_input}'. Allowed OS: {', '.join(os_list)}")
                 
-            
                 
             elif step == "platform_os_version":
                 current_os = None
+                user_input= self.list_to_int(self.nlp_fuzzy(user_input)['CARDINAL'])[0] 
                 for package in self.allowed_values["allowed_packages"]:
                     if "os" in package:
                         current_os = next(
@@ -328,6 +433,7 @@ class Instance_Creation:
             elif step == "database":
                 print("user_input: ", user_input)
                 if "no" not in user_input.lower().strip().split():
+                    user_input = self.remove_stop_words(user_input)
                     databases = []
                     for package in self.allowed_values["allowed_packages"]:
                         if "databases" in package:
@@ -359,6 +465,7 @@ class Instance_Creation:
 
             elif step == "database_version":
                 current_db = None
+                user_input= self.list_to_int(self.nlp_fuzzy(user_input)['CARDINAL'])[0] 
                 for package in self.allowed_values["allowed_packages"]:
                     if "databases" in package:
                         current_db = next(
@@ -372,7 +479,7 @@ class Instance_Creation:
                 print("content of current_db: ", current_db.get("versions", []))
                 if current_db and user_input.strip() in current_db.get("versions", []):
                     # data["packages"]["databases"][0]["version"] = user_input.strip()
-                    data["packages"].get("databases")[0]['version'] = user_input.strip()
+                    data["packages"].get("databases")[0]['version'] = user_input
                     print("#"*100)
                     print("Data after database version selection: ", data)
                     print("#"*100)
@@ -380,6 +487,7 @@ class Instance_Creation:
                     raise ValueError(f"Invalid version. Allowed versions for {self.database}: {', '.join(current_db.get('versions', []))}")
 
             elif step == "cms":
+                user_input = self.remove_stop_words(user_input)
                 if "no" not in user_input.lower().strip().split():
                     cms_list = []
                     for package in self.allowed_values["allowed_packages"]:
@@ -412,6 +520,7 @@ class Instance_Creation:
                     
             elif step == "cms_version":
                 current_cms = None
+                user_input= self.list_to_int(self.nlp_fuzzy(user_input)['CARDINAL'])[0] 
                 for package in self.allowed_values["allowed_packages"]:
                     if "cms" in package:
                         current_cms = next(
@@ -431,6 +540,7 @@ class Instance_Creation:
                     
 
             elif step == "language":
+                user_input = self.remove_stop_words(user_input)
                 if "no" not in user_input.lower().strip().split():
                     langs = []
                     for package in self.allowed_values["allowed_packages"]:
@@ -454,6 +564,7 @@ class Instance_Creation:
             
             elif step == "language_version":
                 current_lang = None
+                user_input= self.list_to_int(self.nlp_fuzzy(user_input)['CARDINAL'])[0] 
                 for package in self.allowed_values["allowed_packages"]:
                     if "programming_languages" in package:
                         current_lang = next(
@@ -487,6 +598,7 @@ class Instance_Creation:
                         raise ValueError(f"No match found for '{user_input}'. Allowed keypairs: {allowed_keypairs}")
 
             elif step == "keypair_creation":
+                user_input = self.remove_stop_words(user_input)
                 if not user_input.strip():
                     raise ValueError("Keypair name cannot be empty.")
                 data["new_publickey_name"] = user_input.strip()
@@ -674,7 +786,7 @@ class Instance_Creation:
             headers=headers
         )
         
-        return response.text
+        return response
     
     
     def trigger_keypair_creation_api(self, instance_data: Dict) -> str:
@@ -688,7 +800,7 @@ class Instance_Creation:
         
         headers = {
             "Authorization": f"Bearer {self.jwt_token}",
-            "Content-Type": "application/json"
+            
         }
         instance_data['public_key'] = payload['keypair_name']
         response = requests.post(
@@ -696,7 +808,8 @@ class Instance_Creation:
             json=payload,
             headers=headers
         )
-        return response
+        print(">>>>>>>>>>>>>>>>>", response.text)
+        return {'type': 'downloadable', 'key': response.tex}
         
         # if response.message == "success":
         # # # Assuming the API returns the file content directly
@@ -714,6 +827,11 @@ class Instance_Creation:
         result = self.run_workflow(query.session_id, query.text)
         logger.info({"event": "instance_creation", "message": f"Instance intermediate collected data for {query.session_id}: {result['data']}"})
 
+        print("#"*100)
+        print('Current Collected Data', result['data']) 
+        print("#"*100)
+        print("#"*100)
+        
         if "new_publickey_name" in result["data"]:
             try:
                 api_response = self.trigger_keypair_creation_api(result["data"] )
@@ -724,6 +842,7 @@ class Instance_Creation:
         if "Instance configuration complete!" in result["response"]:
             logger.info({"event": "instance_creation", "message": f"Instance creation triggered with data: {result['data']}"})
             api_response = self.trigger_instance_creation_api(result["data"])
-            return {"response": api_response}
+            if api_response['code'] == 200:
+                return {"response": "The Instance has been successfully Created."}
             
         return {"response": result["response"]}
