@@ -9,7 +9,7 @@ import redis
 from log.middleware import LoggingMiddleware
 from log.exception_handler import exception_handler
 from log.logging_config import logger
-
+from app.agents.compute_functionality.compute import ComputeChat
 
 
 
@@ -59,7 +59,7 @@ async def chat(query: UserQuery):
         logger.info({"event": "general_chat", "message": "General cgeneral chat accessed"})
         try:
             chat = General_Chat()
-            response = chat.general_chat(query)
+            response = chat.general_chat_2(query)
             # print('#'*40)
             # print(response)
             # print('#'*40)
@@ -76,13 +76,26 @@ async def chat(query: UserQuery):
     #         raise HTTPException(status_code=500, detail=str(e))
     
     
-    elif query.tag == 'instance_creation':
+    elif query.tag == 'instance_creation_chat':
         logger.info({"event": "instance_creation", "message": "Instance creation endpoint accessed"})
         try:    
             workflow = Instance_Creation(query)
             response = workflow.run_chat(query)
             return response
         except Exception as e: 
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    
+    elif query.tag == 'compute_chat':
+        logger.info({"event": "general_chat", "message": "General cgeneral chat accessed"})
+        try:
+            chat = ComputeChat()
+            response = chat.compute_chat(query)
+            # print('#'*40)
+            # print(response)
+            # print('#'*40)
+            return {"response": response}
+        except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
 

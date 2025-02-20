@@ -57,3 +57,44 @@ class General_Chat:
 
             
             return cleaned_response
+
+
+
+    def general_chat_2(self, query : UserQuery)  -> str: 
+
+            session_id = query.session_id
+            history_key = f"conversation:{session_id}"
+            conversation_history = redis_client.get(history_key)
+            system_prompt = prompt_selector('general_2')
+
+            # Parse history or initialize empty list
+            if conversation_history:
+                conversation_history = json.loads(conversation_history)
+            else:
+                conversation_history = [ {"role": "System", "content": system_prompt}]
+                
+
+            # Append the current user query to the history
+            conversation_history.append({"role": "user", "content": query.text})
+            # Pass conversation history to the orchestrator for better context
+            model_input = "\n".join(
+                [f"{msg['role']}: {msg['content']}" for msg in conversation_history]
+            )
+            print('The Query to the model is', model_input)
+
+            response = orchestrator.general_handle_query(model_input)
+
+
+            # Append the model's response to the history
+            conversation_history.append({"role": "assistant", "content": response})
+
+            # Save updated history back to Redis
+            redis_client.set(history_key, json.dumps(conversation_history))
+            
+            print("The Received Response is ------- \n", response)
+            # Return the cleaned response
+
+            cleaned_response = clean_response(response, query.text,)
+
+            
+            return cleaned_response

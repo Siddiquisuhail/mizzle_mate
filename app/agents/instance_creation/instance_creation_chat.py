@@ -508,11 +508,6 @@ class Instance_Creation:
                         self.cms = matched_cms
                     
                     
-                    
-                    
-                    # if matched_cms:
-                    #     data["packages"].get("cms").append({"name": matched_cms})
-                    #     self.cms = matched_cms
                     else:   
                         allowed_cms = ', '.join([cms["name"] for cms in cms_list])
                         raise ValueError(f"No match found for '{user_input}'. Allowed CMS: {allowed_cms}")
@@ -736,19 +731,7 @@ class Instance_Creation:
         # Add hardcoded security group
         instance_data["custom_security_group"] = HARDCODED_SECURITY_GROUP
         
-        # # Ensure array formats
-        # for pkg_type in ["databases", "cms", "programming_languages"]:
-        #     instance_data["packages"][pkg_type] = instance_data["packages"].get(pkg_type, [])
-        
-        # package_list = []
-        # for pkg_type in ["databases", "cms", "programming_languages", "applications"]:
-        #     for pkg in instance_data.get("packages", {}).get(pkg_type, []):
-        #         package_list.append({
-        #             "category": pkg_type,
-        #             "name": pkg["name"],
-        #             "version": pkg["version"]
-        #         })
-                
+               
         package_dict = {"packages": {}}
 
         for pkg_type in ["databases", "cms", "programming_languages", "applications"]:
@@ -809,7 +792,7 @@ class Instance_Creation:
             headers=headers
         )
         print(">>>>>>>>>>>>>>>>>", response.text)
-        return {'type': 'downloadable', 'key': response.tex}
+        return {'type': 'downloadable', 'key': response.text}
         
         # if response.message == "success":
         # # # Assuming the API returns the file content directly

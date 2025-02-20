@@ -27,6 +27,11 @@ class Orchestrator:
     _logged_in = False  # Track login status
     model_name = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"  # Fixed model name
     model_path = "models/deepseek-ai/DeepSeek-R1-Distill-Llama-8B"  # Fixed model path
+    # model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Fixed model name
+    # model_path = "meta-llama/Llama-3.1-8B-Instruct"  # Fixed model path
+
+
+
 
     def __init__(self):
         # Handle Hugging Face login once
@@ -190,6 +195,37 @@ class Orchestrator:
         assistant_response = response.split("assistant:")[-1].strip()
 
         return assistant_response
+
+    def general_handle_query(self, query: str) -> str:
+            # Ensure model & input are on the same device
+            device = self.model.device  # Ensure everything runs on the same device
+            print(f"Model is running on: {device}")
+
+            # Tokenize and move inputs to GPU
+            inputs = self.tokenizer(query, return_tensors="pt").to(device)
+
+            print("Tokenized Input Shape:", inputs["input_ids"].shape)
+            with torch.inference_mode():  # More comprehensive than torch.no_grad()
+                with torch.backends.cuda.sdp_kernel(
+                    enable_flash=True, 
+                    enable_math=False, 
+                    enable_mem_efficient=False
+                ):  # Optimize attention computation
+                    outputs = self.model.generate(
+                        **inputs,
+                        max_new_tokens=512,
+                        temperature=0.4,
+                        top_p=0.8,
+                        do_sample=True,
+                        pad_token_id=self.tokenizer.eos_token_id,
+                        use_cache=True  # Enable KV caching
+                    )
+            
+            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            assistant_response = response.split("assistant:")[-1].strip()
+
+            return assistant_response
+
 
 
 
