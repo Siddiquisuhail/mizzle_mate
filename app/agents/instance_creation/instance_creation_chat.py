@@ -71,7 +71,7 @@ class Instance_Creation:
         if len(projects) < 1:
             state.response = f"**You need to create a project first. Please create a project and then come back to create the instance.**"
         else:
-            state.response = f"**In which project do you want to create the instance?**\n\nAvailable projects you have access to are: \n\n**{', '.join(projects)}**"
+            state.response = f"**Hi There Mate. I am here to help you to create an instance. \nIn which project do you want to create the instance?**\n\nAvailable projects are: \n\n**{', '.join(projects)}**"
         state.current_step = "project"
         return state
 
@@ -367,7 +367,7 @@ class Instance_Creation:
 
             elif step == "instance_type":
                 instances = [i["name"] for i in self.allowed_values["instance_types"]]
-                user_input = self.remove_stop_words(user_input)
+                # user_input = self.remove_stop_words(user_input)
                 matched_instance = self.fuzzy_match(user_input, instances)
                 if matched_instance:
                     selected = next(i for i in self.allowed_values["instance_types"]
@@ -768,8 +768,8 @@ class Instance_Creation:
             json=instance_data,
             headers=headers
         )
-        
-        return response
+        # response.status_code
+        return response.status_code
     
     
     def trigger_keypair_creation_api(self, instance_data: Dict) -> str:
@@ -825,7 +825,7 @@ class Instance_Creation:
         if "Instance configuration complete!" in result["response"]:
             logger.info({"event": "instance_creation", "message": f"Instance creation triggered with data: {result['data']}"})
             api_response = self.trigger_instance_creation_api(result["data"])
-            if api_response['code'] == 200:
-                return {"response": "The Instance has been successfully Created."}
+            if api_response == 200:
+                return "The instance has been successfully created."
             
         return {"response": result["response"]}

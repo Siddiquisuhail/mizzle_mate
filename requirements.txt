@@ -19,3 +19,4 @@ sqlalchemy
 psycopg2-binary
 bitsandbytes
 spacy
+word2number

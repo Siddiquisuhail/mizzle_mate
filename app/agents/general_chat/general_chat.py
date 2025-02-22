@@ -97,4 +97,4 @@ class General_Chat:
             cleaned_response = clean_response(response, query.text,)
 
             
-            return cleaned_response
+            return response

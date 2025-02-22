@@ -59,7 +59,7 @@ async def chat(query: UserQuery):
         logger.info({"event": "general_chat", "message": "General cgeneral chat accessed"})
         try:
             chat = General_Chat()
-            response = chat.general_chat_2(query)
+            response = chat.general_chat(query)
             # print('#'*40)
             # print(response)
             # print('#'*40)

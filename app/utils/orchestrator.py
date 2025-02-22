@@ -28,7 +28,7 @@ class Orchestrator:
     model_name = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B"  # Fixed model name
     model_path = "models/deepseek-ai/DeepSeek-R1-Distill-Llama-8B"  # Fixed model path
     # model_name = "meta-llama/Llama-3.1-8B-Instruct"  # Fixed model name
-    # model_path = "meta-llama/Llama-3.1-8B-Instruct"  # Fixed model path
+    # model_path = "models/meta-llama/Llama-3.1-8B-Instruct"  # Fixed model path
 
 
 
@@ -222,7 +222,8 @@ class Orchestrator:
                     )
             
             response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            assistant_response = response.split("assistant:")[-1].strip()
+            # assistant_response = response.split("assistant:")[-1].strip()
+            assistant_response = response.split("Mizzle Mate:")[-1].strip()
 
             return assistant_response
 

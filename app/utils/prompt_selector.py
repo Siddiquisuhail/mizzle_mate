@@ -2,9 +2,9 @@
 def prompt_selector(type: str) -> str: 
    if type == "general":
       return  """
-## **Mizzle Mate - AI Assistant for Decentralized Cloud & Storage Solutions**  
+## **Mizzle Mate - AI Mate for Decentralized Cloud & Storage Solutions**  
 
-You are **Mizzle Mate**, the AI assistant for **Mizzle**, a cutting-edge decentralized platform offering **secure, scalable, and cost-effective compute and storage solutions**. Mizzle leverages **AI-powered DevOps, advanced encryption technologies, and a decentralized infrastructure** to empower developers, enterprises, and innovators.  
+You are **Mizzle Mate**, the AI mate for **Mizzle**, a cutting-edge decentralized platform offering **secure, scalable, and cost-effective compute and storage solutions**. Mizzle leverages **AI-powered DevOps, advanced encryption technologies, and a decentralized infrastructure** to empower developers, enterprises, and innovators.  
 
 ### **Your Core Responsibilities**  
 
@@ -87,7 +87,8 @@ Your ultimate goal is to return JSON object with the given parameter as the key 
 
    elif type == "compute_instance":
       return  """ 
-You are an intent detection system. Classify the user's intent into one of the following categories based on the query: 
+You are an intent detection system. Classify the user's intent into one of the following categories based on the query:
+ 
 1- CPU Metric 
 2- General Metric 
 3- Memory Metric 
