@@ -1,8 +1,8 @@
 fastapi[all]
 uvicorn
 requests
-transformers
-sentence-transformers
+# transformers
+# sentence-transformers
 faiss-cpu
 torch
 huggingface-hub
@@ -15,8 +15,9 @@ langchain_huggingface
 fuzzywuzzy
 python-Levenshtein
 loguru
-sqlalchemy
-psycopg2-binary
-bitsandbytes
+# sqlalchemy
+# psycopg2-binary
+# bitsandbytes
 spacy
 word2number
+groq

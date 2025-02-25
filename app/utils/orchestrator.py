@@ -7,6 +7,13 @@ import json
 import os
 import gc
 # from bitsandbytes.optim import bnb_4bit_quant_type, bnb_4bit_compute_dtype
+from dotenv import load_dotenv
+
+load_dotenv()
+from groq import Groq
+
+client = Groq()
+
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 
@@ -226,6 +233,78 @@ class Orchestrator:
             assistant_response = response.split("Mizzle Mate:")[-1].strip()
 
             return assistant_response
+        
+        
+    def llm_query_handler(self, query: str, system_prompt: str) -> str:
+        formatted_prompt = (
+            "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n"
+            f"{system_prompt}\n"
+            "<|eot_id|><|start_header_id|>user<|end_header_id|>\n"
+            f"{query}\n"
+            "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n"
+        )
+
+        print("#"*40)
+        print("Formatted Prompt:", formatted_prompt)
+        print("#"*40)
+        # Ensure model & input are on the same device
+        
+        chat_completion = client.chat.completions.create(
+        #
+        # Required parameters
+        #
+        messages=[
+            # Set an optional system message. This sets the behavior of the
+            # assistant and can be used to provide specific instructions for
+            # how it should behave throughout the conversation.
+            {
+                "role": "system",
+                "content": "you are a helpful assistant."
+            },
+            # Set a user message for the assistant to respond to.
+            {
+                "role": "user",
+                "content": "Explain the importance of fast language models",
+            }
+        ],
+
+        # The language model which will generate the completion.
+        model="llama-3.3-70b-versatile",
+
+        #
+        # Optional parameters
+        #
+
+        # Controls randomness: lowering results in less random completions.
+        # As the temperature approaches zero, the model will become deterministic
+        # and repetitive.
+        temperature=0.5,
+
+        # The maximum number of tokens to generate. Requests can use up to
+        # 2048 tokens shared between prompt and completion.
+        max_completion_tokens=1024,
+
+        # Controls diversity via nucleus sampling: 0.5 means half of all
+        # likelihood-weighted options are considered.
+        top_p=1,
+
+        # A stop sequence is a predefined or user-specified text string that
+        # signals an AI to stop generating content, ensuring its responses
+        # remain focused and concise. Examples include punctuation marks and
+        # markers like "[end]".
+        stop=None,
+
+        # If set, partial message deltas will be sent.
+        stream=False,
+    )
+
+        # Print the incremental deltas returned by the LLM.
+        #for chunk in stream:
+         #   output = chunk.choices[0].delta.content
+            
+        output = chat_completion.choices[0].message.content 
+                
+        return output
 
 
 

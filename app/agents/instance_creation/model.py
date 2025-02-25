@@ -7,14 +7,14 @@ from app.models.chat_models import UserQuery
 from app.agents.instance_creation.utils.instance_data_cache import fetch_allowed_values
 from log.logging_config import logger
 from app.utils.response_processing import clean_response
-from app.utils.orchestrator import Orchestrator
+# from app.utils.orchestrator import Orchestrator
 from app.utils.prompt_selector import prompt_selector
 from typing import Dict, List, Optional
 
 
 
 
-orchestrator = Orchestrator()
+# orchestrator = Orchestrator()
 
 # Redis client initialization
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)

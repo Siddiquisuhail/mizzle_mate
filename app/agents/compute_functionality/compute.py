@@ -1,12 +1,12 @@
-from app.utils.orchestrator import Orchestrator
+# from app.utils.orchestrator import Orchestrator
 import redis
 from app.utils.response_processing import clean_response
 from app.utils.prompt_selector import prompt_selector
 from app.models.chat_models import UserQuery, ChatResponse
 import json
 
-
-orchestrator = Orchestrator()
+from app.utils.llm_integration import llm_query_handler
+# orchestrator = Orchestrator()
 
 
 redis_client = redis.Redis(host="localhost", port=6379, decode_responses=True)
@@ -37,8 +37,8 @@ class ComputeChat:
             system_prompt = prompt_selector("compute_instance")
             print("system_prompt: ", system_prompt)
 
-            response = orchestrator.handle_query(model_input, system_prompt)
-
+            # response = orchestrator.handle_query(model_input, system_prompt)
+            response = llm_query_handler(model_input,system_prompt )
 
             # Append the model's response to the history
             conversation_history.append({"role": "assistant", "content": response})
